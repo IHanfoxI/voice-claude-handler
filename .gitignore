@@ -1,0 +1,33 @@
+# Runtime state que genera el handler
+*.wav
+*.png
+*.log
+logs/
+tts_chunks/
+session*.id
+.session*_initialized
+mode
+
+# Modelos (descárgalos con install.sh)
+*.onnx
+*.bin
+kokoro-v1.0.onnx
+voices-v1.0.bin
+
+# Entornos Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db

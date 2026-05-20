@@ -1,0 +1,21 @@
+{
+  "_comment": "Subset de claves de ~/.local/share/com.pais.handy/settings_store.json relevantes para este setup. NO sobrescribas el archivo completo: Handy lo gestiona y otros campos son defaults de la app. Configura estas opciones desde la UI de Handy (Settings → Output / Audio / Bindings) o, si vas a editar el JSON directamente, hazlo con Handy cerrado y solo cambia estas claves.",
+
+  "paste_method": "external_script",
+  "external_script_path": "$HOME/.local/bin/voice-claude-handler.sh",
+
+  "_comment_mic": "El nombre del micrófono varía según tu hardware. Lista los disponibles con `pactl list short sources` o desde la UI de Handy.",
+  "selected_microphone": "<NOMBRE_DE_TU_MIC>",
+
+  "_comment_bindings": "Mantén el atajo de Handy en algo que NO uses (ctrl+space/ctrl+shift+space). Los atajos REALES que vas a presionar (Alt+Z, Super+Z) los configura Hyprland (ver examples/hyprland-bindings.lua); el atajo de Hyprland escribe el modo y dispara `handy --toggle-transcription` por CLI, así que el binding interno de Handy queda como fallback.",
+  "bindings": {
+    "transcribe": { "current_binding": "ctrl+space" },
+    "cancel": { "current_binding": "escape" }
+  },
+
+  "_comment_misc": "Otros campos útiles que conviene revisar en la UI de Handy.",
+  "app_language": "es-CL",
+  "autostart_enabled": true,
+  "clipboard_handling": "dont_modify",
+  "post_process_enabled": false
+}
