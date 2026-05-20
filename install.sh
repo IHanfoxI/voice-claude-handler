@@ -27,8 +27,9 @@ command -v uuidgen >/dev/null 2>&1 || die "uuidgen no encontrado."
 say "Creando directorios en $STATE_DIR y $BIN_DIR"
 mkdir -p "$STATE_DIR"/{kokoro,workdir,logs,tts_chunks,voices} "$BIN_DIR"
 
-say "Copiando handler.sh → $BIN_DIR/voice-claude-handler.sh"
+say "Copiando handler.sh y cancel.sh → $BIN_DIR/"
 install -m 755 "$REPO_DIR/bin/voice-claude-handler.sh" "$BIN_DIR/voice-claude-handler.sh"
+install -m 755 "$REPO_DIR/bin/voice-claude-cancel.sh"  "$BIN_DIR/voice-claude-cancel.sh"
 
 say "Copiando scripts Kokoro → $STATE_DIR/kokoro/"
 install -m 755 "$REPO_DIR/kokoro/stream_tts.py" "$STATE_DIR/kokoro/stream_tts.py"

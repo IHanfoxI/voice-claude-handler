@@ -88,10 +88,40 @@ if [[ "$MODE" == "full" ]]; then
   SESSION_INIT_FLAG="$STATE_DIR/.session-full_initialized"
   CLAUDE_MODEL="opus"
   CLAUDE_EFFORT="high"
-  # CUIDADO: --dangerously-skip-permissions permite a Claude ejecutar Bash/Edit/Write/etc sin confirmar.
-  # Riesgo asumido explícitamente por el usuario.
-  CLAUDE_PERMS=(--dangerously-skip-permissions)
-  SYS_PROMPT="Eres un asistente de voz con acceso completo al sistema del usuario. Ejecuta las acciones que pida (Bash, Edit, Write, WebFetch, etc.). Tu respuesta se LEE EN VOZ ALTA con TTS: español, sin markdown, sin código, sin listas, sin viñetas. Habla todo lo que necesites para responder bien; no te autocensures por longitud."
+  # Whitelist explícita: comandos comunes de control del sistema + tools no
+  # destructivas. Una transcripción mala NO puede disparar rm/sudo/chmod/dd
+  # porque no están permitidos. Si necesitas algo que no esté acá, agrégalo
+  # con criterio (evita Bash(*:*) — equivale a --dangerously-skip-permissions).
+  CLAUDE_FULL_BASH_ALLOW=(
+    'Bash(hyprctl:*)'
+    'Bash(pactl:*)'
+    'Bash(playerctl:*)'
+    'Bash(wpctl:*)'
+    'Bash(brightnessctl:*)'
+    'Bash(omarchy:*)'
+    'Bash(omarchy-launch-or-focus:*)'
+    'Bash(uwsm-app:*)'
+    'Bash(steam:*)'
+    'Bash(setsid:*)'
+    'Bash(notify-send:*)'
+    'Bash(ls:*)'
+    'Bash(cat:*)'
+    'Bash(grep:*)'
+    'Bash(rg:*)'
+    'Bash(find:*)'
+    'Bash(jq:*)'
+    'Bash(du:*)'
+    'Bash(df:*)'
+    'Bash(date:*)'
+    'Bash(uptime:*)'
+    'Bash(free:*)'
+    'Bash(echo:*)'
+    'Bash(printf:*)'
+  )
+  CLAUDE_FULL_TOOLS_ALLOW=(Read Write Edit Glob Grep WebFetch WebSearch)
+  ALLOWED="${CLAUDE_FULL_BASH_ALLOW[*]} ${CLAUDE_FULL_TOOLS_ALLOW[*]}"
+  CLAUDE_PERMS=(--allowedTools "$ALLOWED")
+  SYS_PROMPT="Eres un asistente de voz con permisos acotados al control del sistema del usuario. Puedes ejecutar comandos comunes (hyprctl, pactl, playerctl, omarchy*, steam, uwsm-app, ls/cat/grep/find/jq/du/df, notify-send, etc.) y usar las tools Read/Write/Edit/WebFetch/WebSearch. NO tienes permiso para rm, sudo, chmod, dd, mv ni otros destructivos; si te piden eso, di que no puedes y propone una alternativa. Tu respuesta se LEE EN VOZ ALTA con TTS: español, sin markdown, sin código, sin listas, sin viñetas. Habla todo lo que necesites para responder bien; no te autocensures por longitud."
   if [[ "$WITH_SCREEN" == "1" ]]; then
     USER_PROMPT="Te hablo por voz. Captura del monitor enfocado: \`$SCREEN_FILE\` (léela si la pregunta lo requiere).
 

@@ -8,13 +8,20 @@ hl.bind(
   { description = "Voice → Claude (quick: haiku, Read only)" }
 )
 
--- Voice → Claude (full): Super+Z. Opus + TODAS las tools + permisos saltados.
--- ATENCIÓN: puede ejecutar Bash, Edit, Write, WebFetch, etc. sin confirmar.
--- Una mala transcripción puede disparar acciones no deseadas. Úsalo a sabiendas.
+-- Voice → Claude (full): Super+Z. Opus + whitelist explícita de Bash/tools.
+-- Puede controlar el sistema (hyprctl, pactl, playerctl, omarchy*, steam,
+-- uwsm-app, etc.) y editar archivos, pero NO ejecuta rm, sudo, chmod ni dd.
 hl.bind(
   "SUPER + Z",
   hl.dsp.exec_cmd("sh -c 'echo full > $HOME/.local/share/voice-claude/mode; handy --toggle-transcription'"),
-  { description = "Voice → Claude (full: opus, todas las tools)" }
+  { description = "Voice → Claude (full: opus, whitelist de comandos)" }
+)
+
+-- Cancelar respuesta en curso (mata TTS + claude + stream_tts).
+hl.bind(
+  "ALT SHIFT + Z",
+  hl.dsp.exec_cmd("$HOME/.local/bin/voice-claude-cancel.sh"),
+  { description = "Voice → Claude: cancelar respuesta en curso" }
 )
 
 -- Window rules para que la ventana de Handy no robe foco al juego/app activa.
