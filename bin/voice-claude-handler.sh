@@ -23,6 +23,7 @@ VOICE_FILE="$STATE_DIR/voices/es_ES-sharvard-medium.onnx"  # piper (fallback)
 KOKORO_PY="$STATE_DIR/venv/bin/python"
 KOKORO_SCRIPT="$STATE_DIR/kokoro/tts.py"            # legacy single-shot
 KOKORO_STREAM_SCRIPT="$STATE_DIR/kokoro/stream_tts.py"  # streaming por oraciones
+KOKORO_DAEMON_SCRIPT="$STATE_DIR/kokoro/daemon.py"  # daemon persistente (carga modelo 1 vez)
 KOKORO_VOICE="${VOICE_CLAUDE_VOICE:-ef_dora+af_bella}"
 KOKORO_SPEED="${VOICE_CLAUDE_SPEED:-1.3}"
 # Sink de pulseaudio para reproducir el TTS. Vacío = sink default del sistema.
@@ -50,6 +51,21 @@ fi
 # primer chunk cuando el DAC sale de suspend). pactl es no-op si ya esta
 # activo o si TTS_SINK esta vacio.
 [[ -n "$TTS_SINK" ]] && pactl suspend-sink "$TTS_SINK" 0 2>/dev/null || true
+
+# Auto-start del daemon Kokoro si no responde. El daemon mantiene el modelo
+# cargado entre invocaciones (elimina ~1-2s de carga por turno). Si no logra
+# arrancar en ~3s, stream_tts.py hace fallback a carga local.
+if [[ -x "$KOKORO_PY" && -f "$KOKORO_DAEMON_SCRIPT" ]]; then
+  if ! "$KOKORO_PY" "$KOKORO_DAEMON_SCRIPT" --ping >/dev/null 2>&1; then
+    log "kokoro daemon down, starting in background"
+    nohup "$KOKORO_PY" "$KOKORO_DAEMON_SCRIPT" >>"$LOG_DIR/daemon.log" 2>&1 &
+    disown
+    for _ in 1 2 3 4 5 6; do
+      sleep 0.5
+      "$KOKORO_PY" "$KOKORO_DAEMON_SCRIPT" --ping >/dev/null 2>&1 && break
+    done
+  fi
+fi
 
 # ---- Decision: ¿necesitamos captura? ----
 # Heuristica por keywords en la transcripcion. Si la pregunta no aparenta ser

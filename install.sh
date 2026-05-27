@@ -34,6 +34,7 @@ install -m 755 "$REPO_DIR/bin/voice-claude-cancel.sh"  "$BIN_DIR/voice-claude-ca
 say "Copiando scripts Kokoro → $STATE_DIR/kokoro/"
 install -m 755 "$REPO_DIR/kokoro/stream_tts.py" "$STATE_DIR/kokoro/stream_tts.py"
 install -m 755 "$REPO_DIR/kokoro/tts.py" "$STATE_DIR/kokoro/tts.py"
+install -m 755 "$REPO_DIR/kokoro/daemon.py" "$STATE_DIR/kokoro/daemon.py"
 
 if [[ ! -f "$STATE_DIR/workdir/CLAUDE.md" ]]; then
   say "Copiando CLAUDE.md de ejemplo → $STATE_DIR/workdir/CLAUDE.md (edítalo a tu gusto)"
