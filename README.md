@@ -1,3 +1,7 @@
+🇪🇸 Español &nbsp;·&nbsp; [🇬🇧 English](README.en.md) &nbsp;·&nbsp; [🇧🇷 Português](README.pt.md) &nbsp;·&nbsp; [🇩🇪 Deutsch](README.de.md) &nbsp;·&nbsp; [🇫🇷 Français](README.fr.md) &nbsp;·&nbsp; [🇨🇳 中文](README.zh.md) &nbsp;·&nbsp; [🟩 Esperanto](README.eo.md)
+
+---
+
 # voice-claude-handler
 
 Voice assistant que dicta a **Claude Code** desde cualquier app (incluso juegos en fullscreen). Tu pregunta sale por voz, la respuesta vuelve por voz — **sin** escribir texto en la ventana enfocada y **sin** robarle foco.
