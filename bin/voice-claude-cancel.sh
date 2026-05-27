@@ -8,6 +8,10 @@
 
 set -u
 
+STATE_INDICATOR="$HOME/.local/share/voice-claude/state"
+# Resetea overlay inmediatamente (sin esperar a que mueran los procesos).
+printf 'idle' > "$STATE_INDICATOR" 2>/dev/null || true
+
 KILLED=0
 kill_pattern() {
   if pkill -INT -f "$1" 2>/dev/null; then

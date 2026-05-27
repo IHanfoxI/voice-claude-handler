@@ -38,6 +38,19 @@ DAEMON_SOCK = Path(os.environ.get(
 ))
 DAEMON_TIMEOUT_S = float(os.environ.get("VOICE_CLAUDE_DAEMON_TIMEOUT", "30"))
 
+# Indicador de estado leído por el overlay (voice-claude-overlay).
+STATE_FILE = Path(os.environ.get(
+    "VOICE_CLAUDE_STATE_FILE",
+    Path.home() / ".local/share/voice-claude/state",
+))
+
+
+def set_state(s: str) -> None:
+    try:
+        STATE_FILE.write_text(s)
+    except OSError:
+        pass
+
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 for old in OUT_DIR.glob("chunk_*.wav"):
     try:
@@ -167,11 +180,17 @@ play_q: "queue.Queue[Path | None]" = queue.Queue()
 
 
 def player():
-    """Reproduce wav files en orden FIFO."""
+    """Reproduce wav files en orden FIFO. Escribe 'speaking' al overlay
+    cuando arranca el primer wav y 'idle' al recibir el sentinel."""
+    first = True
     while True:
         item = play_q.get()
         if item is None:
+            set_state("idle")
             return
+        if first:
+            set_state("speaking")
+            first = False
         cmd = ["paplay"]
         if SINK:
             cmd.append(f"--device={SINK}")
@@ -180,6 +199,7 @@ def player():
             subprocess.run(cmd, check=False)
         except FileNotFoundError:
             log("paplay not found")
+            set_state("idle")
             return
 
 

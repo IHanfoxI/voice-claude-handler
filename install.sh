@@ -24,12 +24,28 @@ command -v jq      >/dev/null 2>&1 || warn "jq no encontrado (recomendado para e
 command -v python3 >/dev/null 2>&1 || die "python3 no encontrado."
 command -v uuidgen >/dev/null 2>&1 || die "uuidgen no encontrado."
 
+# Overlay opcional pero recomendado. Si las libs no están, el wrapper se
+# instala igual pero te avisará al ejecutarlo y podés instalarlas después.
+HAS_OVERLAY_LIBS=1
+for cand in /usr/lib/libgtk4-layer-shell.so /usr/lib64/libgtk4-layer-shell.so \
+            /usr/lib/x86_64-linux-gnu/libgtk4-layer-shell.so; do
+  [[ -e "$cand" ]] && HAS_OVERLAY_LIBS=1 && break || HAS_OVERLAY_LIBS=0
+done
+if [[ "$HAS_OVERLAY_LIBS" -eq 0 ]]; then
+  warn "gtk4-layer-shell no encontrado. El overlay no podrá iniciar."
+  warn "Arch: 'sudo pacman -S gtk4-layer-shell python-gobject'."
+fi
+python3 -c 'import gi; gi.require_version("Gtk","4.0"); from gi.repository import Gtk' 2>/dev/null \
+  || warn "python-gobject + gtk4 no detectados. El overlay no podrá iniciar."
+
 say "Creando directorios en $STATE_DIR y $BIN_DIR"
 mkdir -p "$STATE_DIR"/{kokoro,workdir,logs,tts_chunks,voices} "$BIN_DIR"
 
-say "Copiando handler.sh y cancel.sh → $BIN_DIR/"
+say "Copiando handler.sh, cancel.sh, overlay → $BIN_DIR/"
 install -m 755 "$REPO_DIR/bin/voice-claude-handler.sh" "$BIN_DIR/voice-claude-handler.sh"
 install -m 755 "$REPO_DIR/bin/voice-claude-cancel.sh"  "$BIN_DIR/voice-claude-cancel.sh"
+install -m 755 "$REPO_DIR/bin/voice-claude-overlay"    "$BIN_DIR/voice-claude-overlay"
+install -m 755 "$REPO_DIR/bin/voice-claude-overlay.py" "$BIN_DIR/voice-claude-overlay.py"
 
 say "Copiando scripts Kokoro → $STATE_DIR/kokoro/"
 install -m 755 "$REPO_DIR/kokoro/stream_tts.py" "$STATE_DIR/kokoro/stream_tts.py"
@@ -103,8 +119,16 @@ Próximos pasos:
   6. Prueba: presiona Alt+Z, habla algo, suelta. Deberías oír la respuesta
      por el sink configurado. Logs en $STATE_DIR/logs/handler.log.
 
-⚠️  El modo Super+Z corre Claude con --dangerously-skip-permissions:
-   puede ejecutar comandos en tu sistema sin confirmar. Una transcripción
-   mal interpretada puede disparar acciones destructivas. Úsalo solo si
-   entendés y aceptás ese riesgo.
+  7. Overlay de estado (opcional): un punto coloreado arriba-derecha que
+     indica escuchando (verde), pensando (ámbar), contestando (azul) o
+     error (rojo). Se arranca solo si pones \`exec-once = $BIN_DIR/voice-claude-overlay\`
+     en tu config de Hyprland (ya incluido en los ejemplos del paso 2).
+     Test manual: \`$BIN_DIR/voice-claude-overlay &\` y \`echo speaking > $STATE_DIR/state\`.
+
+⚠️  El modo Super+Z corre Claude con una whitelist explícita de comandos
+   (hyprctl, pactl, omarchy*, steam, etc.) y tools no destructivas
+   (Read/Write/Edit/WebFetch/WebSearch). rm/sudo/chmod/dd están bloqueados.
+   Una transcripción mal interpretada igual puede mover/editar archivos o
+   abrir apps — revisá CLAUDE_FULL_BASH_ALLOW en el handler si querés
+   restringir más.
 EOF

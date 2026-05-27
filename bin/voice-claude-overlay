@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Wrapper para voice-claude-overlay.py. Inyecta libgtk4-layer-shell.so via
+# LD_PRELOAD para forzar que se cargue antes que libwayland-client (sino el
+# overlay aparece como ventana normal en vez de layer-shell). Ver:
+# https://github.com/wmww/gtk4-layer-shell/blob/main/linking.md
+
+set -u
+
+LIB=""
+for cand in \
+  /usr/lib/libgtk4-layer-shell.so \
+  /usr/lib64/libgtk4-layer-shell.so \
+  /usr/lib/x86_64-linux-gnu/libgtk4-layer-shell.so \
+  /usr/local/lib/libgtk4-layer-shell.so
+do
+  [[ -e "$cand" ]] && LIB="$cand" && break
+done
+
+if [[ -z "$LIB" ]]; then
+  echo "voice-claude-overlay: libgtk4-layer-shell.so no encontrado." >&2
+  echo "Instala el paquete (Arch: 'sudo pacman -S gtk4-layer-shell')." >&2
+  exit 1
+fi
+
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec env LD_PRELOAD="$LIB" python3 "$DIR/voice-claude-overlay.py" "$@"

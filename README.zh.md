@@ -100,6 +100,27 @@ handler 在调用 Claude 前执行 `cd ~/.local/share/voice-claude/workdir`，�
 
 日志：`~/.local/share/voice-claude/logs/handler.log`。
 
+## 状态指示器（可选）
+
+右上角的小圆点（layer-shell，即使在全屏下也可见），根据系统状态变换颜色：
+
+| 颜色 | 状态 |
+|---|---|
+| 🟢 绿色 | Handy 正在听你说话 |
+| 🟡 琥珀色 | Claude 正在思考（生成回复） |
+| 🔵 蓝色 | TTS 正在播放回复 |
+| 🔴 红色 | 错误（约 2.5 秒后自动隐藏） |
+| （隐藏） | 空闲 |
+
+需要 `gtk4-layer-shell` + `python-gobject`（Arch：`sudo pacman -S gtk4-layer-shell python-gobject`）。Hyprland 自动启动配置已包含在 `examples/hyprland-bindings.{lua,conf}` 的 `exec-once` 中。手动测试：
+
+```bash
+voice-claude-overlay &
+echo speaking > ~/.local/share/voice-claude/state
+```
+
+状态由 handler、`stream_tts.py`、cancel 脚本和快捷键（`listening`）自动写入。大小/位置可通过环境变量配置：`VOICE_CLAUDE_OVERLAY_SIZE`、`VOICE_CLAUDE_OVERLAY_MARGIN_TOP`、`VOICE_CLAUDE_OVERLAY_MARGIN_RIGHT`。
+
 ## ⚠️ 关于 Super+Z 模式（完整模式）
 
 完整模式使用 `--allowedTools` 启动 Claude Opus，指向**显式白名单**：

@@ -100,6 +100,27 @@ Das Installationsskript kopiert ein Beispiel. Ersetze die Platzhalter durch dein
 
 Logs: `~/.local/share/voice-claude/logs/handler.log`.
 
+## Status-Overlay (optional)
+
+Ein kleiner Punkt oben rechts (layer-shell, sichtbar selbst über Vollbild) der die Farbe je nach Systemzustand wechselt:
+
+| Farbe | Zustand |
+|---|---|
+| 🟢 grün | Handy hört deine Stimme |
+| 🟡 bernstein | Claude denkt nach (generiert Antwort) |
+| 🔵 blau | TTS spielt die Antwort ab |
+| 🔴 rot | Fehler (verschwindet nach ~2.5s) |
+| (versteckt) | idle |
+
+Benötigt `gtk4-layer-shell` + `python-gobject` (Arch: `sudo pacman -S gtk4-layer-shell python-gobject`). Für Hyprland-Autostart enthalten die Snippets in `examples/hyprland-bindings.{lua,conf}` bereits `exec-once`. Manueller Test:
+
+```bash
+voice-claude-overlay &
+echo speaking > ~/.local/share/voice-claude/state
+```
+
+Der Zustand wird automatisch vom Handler, `stream_tts.py`, Cancel und den Keybinds (`listening`) geschrieben. Größe/Position konfigurierbar via env: `VOICE_CLAUDE_OVERLAY_SIZE`, `VOICE_CLAUDE_OVERLAY_MARGIN_TOP`, `VOICE_CLAUDE_OVERLAY_MARGIN_RIGHT`.
+
 ## ⚠️ Über den Super+Z-Modus (vollständig)
 
 Der vollständige Modus läuft Claude Opus mit `--allowedTools`, das auf eine **explizite Whitelist** zeigt:

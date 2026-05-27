@@ -31,15 +31,26 @@ KOKORO_SPEED="${VOICE_CLAUDE_SPEED:-1.3}"
 # Para fijarlo permanentemente, exporta VOICE_CLAUDE_SINK en tu shell o en el atajo.
 TTS_SINK="${VOICE_CLAUDE_SINK:-}"
 TTS_CHUNK_DIR="$STATE_DIR/tts_chunks"
+STATE_INDICATOR="$STATE_DIR/state"
 
 mkdir -p "$WORKDIR" "$LOG_DIR"
 exec >>"$LOG_FILE" 2>&1
 
 log() { printf '%s %s\n' "$(date +'%H:%M:%S')" "$*"; }
+set_state() { printf '%s' "$1" > "$STATE_INDICATOR" 2>/dev/null || true; }
+
+# Si la corrida termina abruptamente, el overlay quedaría stuck en
+# "thinking"/"speaking". Trampa cleanup. Cambiar EXIT_STATE=error antes de
+# exit para que el overlay parpadee rojo (auto-reset a idle a los ~2.5s).
+EXIT_STATE=idle
+trap 'set_state "$EXIT_STATE"' EXIT
 
 MODE=$(cat "$MODE_FILE" 2>/dev/null || echo "quick")
 log "===== handler invoked (mode=$MODE) ====="
 log "text: $TEXT"
+
+# Indicar al overlay que ya pasamos de "listening" (Handy termino) a procesar.
+set_state thinking
 
 if [[ -z "${TEXT// }" ]]; then
   log "empty transcription, exiting"
@@ -209,11 +220,13 @@ if [[ -x "$KOKORO_PY" && -f "$KOKORO_STREAM_SCRIPT" ]]; then
     touch "$SESSION_INIT_FLAG"
   else
     notify-send -t 4000 "Claude (error)" "claude exit=$CLAUDE_EXIT mode=$MODE — revisa $LOG_FILE" || true
+    EXIT_STATE=error
   fi
 
   if [[ $TTS_EXIT -ne 0 ]]; then
     log "stream_tts produjo 0 chunks — sin audio"
     notify-send -t 4000 "Claude (sin audio)" "stream_tts no genero audio. Revisa $LOG_FILE" || true
+    EXIT_STATE=error
   fi
 
   log "done"
@@ -237,6 +250,7 @@ log "response: $RESPONSE"
 
 if [[ $CLAUDE_EXIT -ne 0 ]] || [[ -z "${RESPONSE// }" ]]; then
   notify-send -t 4000 "Claude (error)" "exit=$CLAUDE_EXIT mode=$MODE — revisa $LOG_FILE" || true
+  EXIT_STATE=error
   exit 0
 fi
 

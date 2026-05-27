@@ -100,6 +100,27 @@ La instalilo kopias ekzemplon. Anstataŭigu la loktenilojn per viaj datumoj.
 
 Protokoloj: `~/.local/share/voice-claude/logs/handler.log`.
 
+## Statobildo (laŭvola)
+
+Eta punkto en la supra-dekstra angulo (layer-shell, videbla eĉ super tutekrana reĝimo) kiu ŝanĝas koloron laŭ kio okazas en la sistemo:
+
+| Koloro | Stato |
+|---|---|
+| 🟢 verda | Handy aŭskultas vian voĉon |
+| 🟡 sukcena | Claude pensas (generas respondon) |
+| 🔵 blua | TTS reproduktas la respondon |
+| 🔴 ruĝa | eraro (aŭtomate kaŝiĝas post ~2.5s) |
+| (kaŝita) | senokupa |
+
+Bezonas `gtk4-layer-shell` + `python-gobject` (Arch: `sudo pacman -S gtk4-layer-shell python-gobject`). Por aŭtomata starto en Hyprland, la fragmentoj en `examples/hyprland-bindings.{lua,conf}` jam inkluzivas `exec-once`. Mana testo:
+
+```bash
+voice-claude-overlay &
+echo speaking > ~/.local/share/voice-claude/state
+```
+
+La stato estas skribita aŭtomate de la handler, `stream_tts.py`, cancel kaj la klavkombinoj (`listening`). Grandeco/pozicio agordeblas per env: `VOICE_CLAUDE_OVERLAY_SIZE`, `VOICE_CLAUDE_OVERLAY_MARGIN_TOP`, `VOICE_CLAUDE_OVERLAY_MARGIN_RIGHT`.
+
 ## ⚠️ Pri la reĝimo Super+Z (plena)
 
 La plena reĝimo ruladas Claude Opus kun `--allowedTools` montranta al **eksplicita permeslisto**:
