@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-"""Streaming TTS para voice-claude.
+"""Streaming TTS para voice-claude — pipeline 3 hilos.
 
-Lee stream-json de `claude -p` por stdin, extrae text_delta de bloques tipo
-text (ignora thinking_delta), parte por oraciones y manda cada una a Kokoro
-en cuanto se cierra el boundary. La reproducción corre en un hilo aparte
-para que la sintesis de la oracion N+1 se solape con el playback de la N.
+  Hilo 1 (main/stdin): lee stream-json de claude → detecta sentence
+                        boundaries → pone oraciones en sentence_q.
+  Hilo 2 (synth):      sentence_q → daemon o Kokoro local → play_q.
+  Hilo 3 (player):     play_q → paplay, trackea Popen.
 
-Si hay un daemon Kokoro escuchando en VOICE_CLAUDE_DAEMON_SOCK (o el path por
-defecto), se usa para sintetizar — evita cargar el modelo en cada invocacion.
-Si el daemon no responde, fallback a carga local de Kokoro (modo legacy).
-
-Uso: stream_tts.py <out_dir> [voice] [speed] [lang] [sink]
+Sentinela None propaga shutdown limpio: sentence_q(None) →
+synth_worker → play_q(None) → player → exit.
 """
 import json
 import os
@@ -39,12 +36,12 @@ DAEMON_SOCK = Path(os.environ.get(
 ))
 DAEMON_TIMEOUT_S = float(os.environ.get("VOICE_CLAUDE_DAEMON_TIMEOUT", "30"))
 
-# Indicador de estado leído por el overlay (voice-claude-overlay).
 STATE_FILE = Path(os.environ.get(
     "VOICE_CLAUDE_STATE_FILE",
     Path.home() / ".local/share/voice-claude/state",
 ))
 THINKING_LOOP_PID_FILE = STATE_FILE.parent / "thinking_loop.pid"
+CANCEL_FILE = STATE_FILE.parent / "cancel"
 
 
 def set_state(s: str) -> None:
@@ -64,6 +61,11 @@ def set_state(s: str) -> None:
         except Exception:
             pass
 
+
+def is_cancelled() -> bool:
+    return CANCEL_FILE.exists()
+
+
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 for old in OUT_DIR.glob("chunk_*.wav"):
     try:
@@ -77,10 +79,6 @@ def log(msg: str) -> None:
     sys.stderr.flush()
 
 
-# Pre-warm: el sink HDMI suspende cuando esta idle y al despertar se come los
-# primeros ~200-300ms del primer audio. Disparamos un paplay con 500ms de
-# silencio en background ahora; mientras claude empieza a generar, el sink ya
-# esta abierto para cuando llegue el primer chunk real.
 def prewarm_sink() -> None:
     silence_path = OUT_DIR / "_prewarm_silence.wav"
     if not silence_path.exists():
@@ -100,7 +98,6 @@ def prewarm_sink() -> None:
 prewarm_sink()
 
 
-# ---- Backend: daemon o local ----
 def _ping_daemon() -> bool:
     if not DAEMON_SOCK.exists():
         return False
@@ -124,7 +121,7 @@ if USE_DAEMON:
     log(f"using kokoro daemon at {DAEMON_SOCK}")
 else:
     log("daemon unavailable, loading kokoro in-process")
-    from kokoro_onnx import Kokoro  # import diferido (caro)
+    from kokoro_onnx import Kokoro
     base = Path(__file__).resolve().parent
     t0 = time.monotonic()
     kokoro = Kokoro(str(base / "kokoro-v1.0.onnx"), str(base / "voices-v1.0.bin"))
@@ -171,14 +168,11 @@ def local_synth(text: str, out_path: Path, lead_silence: float) -> None:
     sf.write(out_path, samples, sr)
 
 
-# Boundary = puntuacion final seguida de espacio. Si la puntuacion queda al
-# final del buffer sin espacio detras, esperamos por si viene mas texto.
 SENTENCE_BOUNDARY = re.compile(r"[.!?…\n](\s+)")
 
 
 def split_complete(buffer: str):
-    """Devuelve (oraciones_completas, resto). Una oracion es completa cuando
-    termina en .!?… seguido de whitespace (otro token ya llego)."""
+    """Returns (complete_sentences, remainder). Sentence complete = .!?… followed by whitespace."""
     sentences = []
     last = 0
     for m in SENTENCE_BOUNDARY.finditer(buffer):
@@ -189,16 +183,58 @@ def split_complete(buffer: str):
     return sentences, buffer[last:]
 
 
+# ---- Queues ----
+sentence_q: "queue.Queue[str | None]" = queue.Queue()
 play_q: "queue.Queue[Path | None]" = queue.Queue()
 
+_current_proc: "subprocess.Popen | None" = None
+_current_proc_lock = threading.Lock()
 
-def player():
-    """Reproduce wav files en orden FIFO. Escribe 'speaking' al overlay
-    cuando arranca el primer wav y 'idle' al recibir el sentinel."""
+FIRST_CHUNK_LEAD_SILENCE_S = 0.2
+
+
+def synth_worker() -> None:
+    """Thread 2: sentence_q → synth → play_q. Propagates None sentinel."""
+    idx = 0
+    while True:
+        sentence = sentence_q.get()
+        if sentence is None or is_cancelled():
+            play_q.put(None)
+            return
+        t = time.monotonic()
+        wav_path = OUT_DIR / f"chunk_{idx:03d}.wav"
+        lead = FIRST_CHUNK_LEAD_SILENCE_S if idx == 0 else 0.0
+        try:
+            if USE_DAEMON:
+                daemon_synth(sentence, wav_path, lead)
+            else:
+                local_synth(sentence, wav_path, lead)
+        except Exception as e:
+            log(f"synth #{idx} failed: {e}")
+            idx += 1
+            continue
+        log(f"synth #{idx} ({len(sentence)} chars) in {time.monotonic()-t:.2f}s -> {wav_path.name}")
+        play_q.put(wav_path)
+        idx += 1
+
+
+def player() -> None:
+    """Thread 3: play_q → paplay. Tracks current Popen for cancel."""
+    global _current_proc
     first = True
     while True:
         item = play_q.get()
         if item is None:
+            set_state("idle")
+            return
+        if is_cancelled():
+            with _current_proc_lock:
+                proc = _current_proc
+            if proc:
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
             set_state("idle")
             return
         if first:
@@ -209,46 +245,36 @@ def player():
             cmd.append(f"--device={SINK}")
         cmd.append(str(item))
         try:
-            subprocess.run(cmd, check=False)
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            with _current_proc_lock:
+                _current_proc = proc
+            proc.wait()
+            with _current_proc_lock:
+                _current_proc = None
         except FileNotFoundError:
             log("paplay not found")
             set_state("idle")
             return
 
 
+synth_thread = threading.Thread(target=synth_worker, daemon=True)
 play_thread = threading.Thread(target=player, daemon=True)
+synth_thread.start()
 play_thread.start()
 
 
-FIRST_CHUNK_LEAD_SILENCE_S = 0.2  # red de seguridad si el prewarm no alcanzo
-
-
-def synthesize_and_queue(text: str, idx: int) -> None:
-    t = time.monotonic()
-    wav_path = OUT_DIR / f"chunk_{idx:03d}.wav"
-    lead = FIRST_CHUNK_LEAD_SILENCE_S if idx == 0 else 0.0
-    try:
-        if USE_DAEMON:
-            daemon_synth(text, wav_path, lead)
-        else:
-            local_synth(text, wav_path, lead)
-    except Exception as e:
-        log(f"synth #{idx} failed: {e}")
-        return
-    log(f"synth #{idx} ({len(text)} chars) in {time.monotonic()-t:.2f}s -> {wav_path.name}")
-    play_q.put(wav_path)
-
-
-# Track which content_block indices are "text" (vs "thinking")
 text_indices: set[int] = set()
 buffer = ""
-chunk_idx = 0
 full_text_parts: list[str] = []
 saw_any_text = False
 result_text = None
+queued_count = 0
 
 try:
     for line in sys.stdin:
+        if is_cancelled():
+            log("cancel detected in stdin loop")
+            break
         line = line.strip()
         if not line:
             continue
@@ -289,26 +315,28 @@ try:
             saw_any_text = True
             complete, buffer = split_complete(buffer)
             for s in complete:
+                if is_cancelled():
+                    break
                 full_text_parts.append(s)
-                synthesize_and_queue(s, chunk_idx)
-                chunk_idx += 1
+                sentence_q.put(s)
+                queued_count += 1
 
-    # Flush remaining buffer
-    tail = buffer.strip()
-    if tail:
-        full_text_parts.append(tail)
-        synthesize_and_queue(tail, chunk_idx)
-        chunk_idx += 1
+    if not is_cancelled():
+        tail = buffer.strip()
+        if tail:
+            full_text_parts.append(tail)
+            sentence_q.put(tail)
+            queued_count += 1
 
-    # Si por alguna razon no llegaron text_deltas pero hay result text, usalo.
-    if not saw_any_text and result_text:
-        log("no stream text, using result fallback")
-        synthesize_and_queue(result_text.strip(), chunk_idx)
-        chunk_idx += 1
-        full_text_parts.append(result_text.strip())
+        if not saw_any_text and result_text:
+            log("no stream text, using result fallback")
+            sentence_q.put(result_text.strip())
+            full_text_parts.append(result_text.strip())
+            queued_count += 1
 
 finally:
-    play_q.put(None)
+    sentence_q.put(None)
+    synth_thread.join(timeout=120)
     play_thread.join(timeout=120)
 
 if full_text_parts:
@@ -317,4 +345,4 @@ if full_text_parts:
 else:
     log("no text produced")
 
-sys.exit(0 if chunk_idx > 0 else 1)
+sys.exit(0 if queued_count > 0 else 1)
