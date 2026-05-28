@@ -89,8 +89,16 @@ fi
 
 say "Copiando scripts Kokoro → $STATE_DIR/kokoro/"
 install -m 755 "$REPO_DIR/kokoro/stream_tts.py" "$STATE_DIR/kokoro/stream_tts.py"
-install -m 755 "$REPO_DIR/kokoro/tts.py" "$STATE_DIR/kokoro/tts.py"
-install -m 755 "$REPO_DIR/kokoro/daemon.py" "$STATE_DIR/kokoro/daemon.py"
+install -m 755 "$REPO_DIR/kokoro/tts.py"        "$STATE_DIR/kokoro/tts.py"
+install -m 755 "$REPO_DIR/kokoro/daemon.py"      "$STATE_DIR/kokoro/daemon.py"
+install -m 644 "$REPO_DIR/kokoro/config.py"      "$STATE_DIR/kokoro/config.py"
+
+if [[ ! -f "$STATE_DIR/config.yaml" ]]; then
+  say "Copiando config.yaml de ejemplo → $STATE_DIR/config.yaml (edítalo a gusto)"
+  install -m 644 "$REPO_DIR/examples/config.yaml" "$STATE_DIR/config.yaml"
+else
+  say "config.yaml ya existe; no lo sobrescribo. Compara con $REPO_DIR/examples/config.yaml si quieres actualizarlo."
+fi
 
 if [[ ! -f "$STATE_DIR/workdir/CLAUDE.md" ]]; then
   say "Copiando CLAUDE.md de ejemplo → $STATE_DIR/workdir/CLAUDE.md (edítalo a tu gusto)"

@@ -1,0 +1,123 @@
+# voice-claude-handler — configuración modular
+# Copia a ~/.local/share/voice-claude/config.yaml y edita a gusto.
+# Solo necesitas incluir las secciones que quieres sobreescribir;
+# el resto usa los valores por defecto embebidos en kokoro/config.py.
+#
+# Requiere: pyyaml  (pip install pyyaml  o  pacman -S python-yaml)
+# Env vars VOICE_CLAUDE_* siguen teniendo prioridad sobre este archivo.
+
+tts:
+  # Voz Kokoro. Puede ser una sola (ej. "ef_dora") o blend con "+" (ej. "ef_dora+af_bella").
+  voice: "ef_dora+af_bella"
+
+  # Velocidad de síntesis. 1.0 = normal, 1.3 = más rápido para TTS de voz.
+  speed: 1.3
+
+  # Idioma para Kokoro. "es" para español.
+  lang: "es"
+
+  # Sink de PulseAudio/PipeWire para reproducir el TTS.
+  # Vacío = sink por defecto del sistema.
+  # Lista sinks disponibles: pactl list short sinks
+  sink: ""
+
+  # Timeout de respuesta del daemon Kokoro (segundos).
+  daemon_timeout: 30
+
+# Modelos por modo. quick = Alt+Z, full = Super+Z.
+models:
+  quick:
+    model: "haiku"
+    effort: "low"
+  full:
+    model: "opus"
+    effort: "high"
+
+# Palabras y frases que activan la captura de pantalla antes de llamar a Claude.
+# Si la transcripción contiene alguna, se hace screenshot y se incluye en el prompt.
+# Modifica/amplía esta lista para ajustar los falsos positivos/negativos.
+screen_keywords:
+  words:
+    - pantalla
+    - ventana
+    - ventanas
+    - monitor
+    - escritorio
+    - captura
+    - capturas
+    - screenshot
+    - imagen
+    - imagenes
+    - foto
+    - fotos
+    - aplicacion
+    - aplicaciones
+    - programa
+    - programas
+    - pestana
+    - pestanas
+    - navegador
+    - terminal
+    - consola
+    - codigo
+    - editor
+    - mira
+    - miro
+    - miras
+    - miramos
+    - miran
+    - mirando
+    - mirar
+    - fijate
+    - fijar
+    - fija
+    - fijese
+    - ves
+    - veo
+    - vemos
+    - veas
+    - ver
+    - viendo
+    - viste
+    - leer
+    - lee
+    - leelo
+    - leen
+    - leyendo
+    - cursor
+    - raton
+    - mouse
+    - click
+    - clickea
+    - clic
+    - boton
+    - botones
+    - menu
+    - menus
+    - icono
+    - iconos
+    - color
+    - colores
+  phrases:
+    - "que dice"
+    - "que pone"
+    - "que sale"
+    - "que aparece"
+    - "que muestra"
+    - "que tengo abierto"
+    - "esta abierto"
+    - "esta abierta"
+    - "en pantalla"
+    - "aca arriba"
+    - "aca abajo"
+    - "aqui arriba"
+    - "aqui abajo"
+    - "ese error"
+    - "este error"
+    - "ese mensaje"
+    - "este mensaje"
+    - "esta linea"
+    - "esta funcion"
+    - "esta pestana"
+    - "este boton"
+    - "ese boton"

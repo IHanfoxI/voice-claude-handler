@@ -24,11 +24,20 @@ KOKORO_PY="$STATE_DIR/venv/bin/python"
 KOKORO_SCRIPT="$STATE_DIR/kokoro/tts.py"            # legacy single-shot
 KOKORO_STREAM_SCRIPT="$STATE_DIR/kokoro/stream_tts.py"  # streaming por oraciones
 KOKORO_DAEMON_SCRIPT="$STATE_DIR/kokoro/daemon.py"  # daemon persistente (carga modelo 1 vez)
+KOKORO_CONFIG_SCRIPT="$STATE_DIR/kokoro/config.py"  # config YAML → env vars
+
+# Cargar config YAML si está disponible. Env vars exportadas previamente tienen
+# prioridad (los defaults del YAML solo se aplican si la var no está ya seteada).
+if [[ -x "$KOKORO_PY" && -f "$KOKORO_CONFIG_SCRIPT" ]]; then
+  eval "$("$KOKORO_PY" "$KOKORO_CONFIG_SCRIPT" --shell 2>/dev/null)" || true
+fi
+
 KOKORO_VOICE="${VOICE_CLAUDE_VOICE:-ef_dora+af_bella}"
 KOKORO_SPEED="${VOICE_CLAUDE_SPEED:-1.3}"
 # Sink de pulseaudio para reproducir el TTS. Vacío = sink default del sistema.
 # Para listar sinks: pactl list short sinks
-# Para fijarlo permanentemente, exporta VOICE_CLAUDE_SINK en tu shell o en el atajo.
+# Para fijarlo permanentemente: exporta VOICE_CLAUDE_SINK en tu shell,
+# o edita ~/.local/share/voice-claude/config.yaml (clave tts.sink).
 TTS_SINK="${VOICE_CLAUDE_SINK:-}"
 TTS_CHUNK_DIR="$STATE_DIR/tts_chunks"
 STATE_INDICATOR="$STATE_DIR/state"
@@ -149,11 +158,10 @@ if _is_reset_cmd "$TEXT"; then
 fi
 
 # ---- Decision: ¿necesitamos captura? ----
-# Heuristica por keywords en la transcripcion. Si la pregunta no aparenta ser
-# visual, omitimos `grim` + upload de imagen (ahorra ~500ms y ~3k tokens).
-# Falsos negativos > falsos positivos en perjuicio, asi que la lista es generosa.
-SCREEN_KW_RE='\b(pantalla|ventana|ventanas|monitor|escritorio|captura|capturas|screenshot|imagen|imagenes|foto|fotos|aplicacion|aplicaciones|programa|programas|pestana|pestanas|navegador|terminal|consola|codigo|editor|mira|miro|miras|miramos|miran|mirando|mirar|fijate|fijar|fija|fijese|ves|veo|vemos|veas|ver|viendo|viste|leer|lee|leelo|leen|leyendo|cursor|raton|mouse|click|clickea|clic|boton|botones|menu|menus|icono|iconos|color|colores)\b'
-SCREEN_PHRASE_RE='(que dice|que pone|que sale|que aparece|que muestra|que tengo abierto|esta abierto|esta abierta|en pantalla|aca arriba|aca abajo|aqui arriba|aqui abajo|ese error|este error|ese mensaje|este mensaje|esta linea|esta funcion|esta pestana|este boton|ese boton)'
+# Regex cargada desde config.yaml (via config.py --shell) si está disponible.
+# Si no, se usan los valores hardcoded como fallback.
+SCREEN_KW_RE="${VOICE_CLAUDE_SCREEN_KW_RE:-\b(pantalla|ventana|ventanas|monitor|escritorio|captura|capturas|screenshot|imagen|imagenes|foto|fotos|aplicacion|aplicaciones|programa|programas|pestana|pestanas|navegador|terminal|consola|codigo|editor|mira|miro|miras|miramos|miran|mirando|mirar|fijate|fijar|fija|fijese|ves|veo|vemos|veas|ver|viendo|viste|leer|lee|leelo|leen|leyendo|cursor|raton|mouse|click|clickea|clic|boton|botones|menu|menus|icono|iconos|color|colores)\b}"
+SCREEN_PHRASE_RE="${VOICE_CLAUDE_SCREEN_PHRASE_RE:-(que dice|que pone|que sale|que aparece|que muestra|que tengo abierto|esta abierto|esta abierta|en pantalla|aca arriba|aca abajo|aqui arriba|aqui abajo|ese error|este error|ese mensaje|este mensaje|esta linea|esta funcion|esta pestana|este boton|ese boton)}"
 
 needs_screenshot() {
   local norm
