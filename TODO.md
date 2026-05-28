@@ -15,36 +15,36 @@ Elimina costo de carga de modelo Kokoro (~1-2s) por invocación. Socket Unix.
 
 **Medido:** carga modelo 0.33s en daemon, synth 0.16-0.32s por oración (vs ~2-3s antes con carga + synth combinados). Stream_tts.py ya no importa `kokoro_onnx` cuando daemon está vivo.
 
-## 2. Pipeline 3 hilos explícito
+## 2. Pipeline 3 hilos explícito ✅
 
-`stream_tts.py` actualmente: síntesis bloquea stdin reader. Separar.
+`stream_tts.py` ahora tiene 3 hilos desacoplados. Síntesis no bloquea stdin reader.
 
-- [ ] Hilo 1 (main/stdin): lee stream-json → boundary detect → `sentence_q`
-- [ ] Hilo 2 (synth worker): `sentence_q` → daemon call → `play_q`
-- [ ] Hilo 3 (player): `play_q` → `paplay` (trackea `Popen` para cancel)
-- [ ] Sentinel `None` para shutdown limpio por hilo
+- [x] Hilo 1 (main/stdin): lee stream-json → boundary detect → `sentence_q`
+- [x] Hilo 2 (synth worker): `sentence_q` → daemon call → `play_q`
+- [x] Hilo 3 (player): `play_q` → `paplay` (trackea `Popen`)
+- [x] Sentinel `None` propaga shutdown limpio: sentence_q → synth → play_q → player
 
-## 3. Cancel real (graceful)
+## 3. Cancel real (graceful) ✅
 
-Hoy: `pkill` por patrón. Mejor: flag file + signal cooperativo.
+Flag file + signal cooperativo en los 3 hilos.
 
-- [ ] Flag: `~/.local/share/voice-claude/cancel`
-- [ ] `cancel.sh` → `touch cancel` + `SIGINT` al `claude -p`
-- [ ] `stream_tts.py` chequea flag en los 3 hilos (entre oraciones, antes de synth, después de wav)
-- [ ] Player `.terminate()` al `paplay` actual
-- [ ] Handler limpia flag al inicio (evita estado viejo)
+- [x] Flag: `~/.local/share/voice-claude/cancel`
+- [x] `cancel.sh` → `touch cancel` + pkill (belt+suspenders)
+- [x] `stream_tts.py` chequea `is_cancelled()` en stdin loop, synth_worker, player
+- [x] Player `.terminate()` al `paplay` actual si cancel detectado
+- [x] Handler limpia flag al inicio (evita estado viejo)
 
-## 4. Config modular
+## 4. Config modular ✅
 
-YAML único en `~/.local/share/voice-claude/config.yaml`. Env vars siguen como override.
+YAML en `~/.local/share/voice-claude/config.yaml`. Env vars siguen como override.
 
-- [ ] `kokoro/config.py` — carga YAML + defaults + env overrides
-- [ ] Bloques: `tts`, `models` (quick/full), `permissions.full.bash/tools`, `screen_keywords.words/phrases`
-- [ ] `config.py --shell` emite env vars sourceables por `handler.sh`
-- [ ] `config.py --json` para debug
-- [ ] `examples/config.yaml` plantilla
-- [ ] `requirements.txt` += `pyyaml`
-- [ ] `install.sh` copia plantilla si no existe (no sobreescribe)
+- [x] `kokoro/config.py` — carga YAML + defaults + env overrides
+- [x] Bloques: `tts`, `models` (quick/full), `screen_keywords.words/phrases`
+- [x] `config.py --shell` emite env vars sourceables por `handler.sh`
+- [x] `config.py --json` para debug
+- [x] `examples/config.yaml` plantilla completa documentada
+- [x] `requirements.txt` += `pyyaml`
+- [x] `install.sh` copia plantilla si no existe (no sobreescribe)
 
 ## Compatibilidad
 
