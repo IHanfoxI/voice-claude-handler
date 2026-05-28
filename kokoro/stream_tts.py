@@ -16,6 +16,7 @@ import json
 import os
 import queue
 import re
+import signal
 import socket
 import subprocess
 import sys
@@ -43,6 +44,7 @@ STATE_FILE = Path(os.environ.get(
     "VOICE_CLAUDE_STATE_FILE",
     Path.home() / ".local/share/voice-claude/state",
 ))
+THINKING_LOOP_PID_FILE = STATE_FILE.parent / "thinking_loop.pid"
 
 
 def set_state(s: str) -> None:
@@ -50,6 +52,17 @@ def set_state(s: str) -> None:
         STATE_FILE.write_text(s)
     except OSError:
         pass
+    if s in ("speaking", "idle", "error"):
+        try:
+            pid = int(THINKING_LOOP_PID_FILE.read_text().strip())
+            try:
+                subprocess.run(["pkill", "-P", str(pid)], capture_output=True)
+            except Exception:
+                pass
+            os.kill(pid, signal.SIGTERM)
+            THINKING_LOOP_PID_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 for old in OUT_DIR.glob("chunk_*.wav"):

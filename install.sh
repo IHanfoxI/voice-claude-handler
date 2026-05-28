@@ -39,7 +39,7 @@ python3 -c 'import gi; gi.require_version("Gtk","4.0"); from gi.repository impor
   || warn "python-gobject + gtk4 no detectados. El overlay no podrá iniciar."
 
 say "Creando directorios en $STATE_DIR y $BIN_DIR"
-mkdir -p "$STATE_DIR"/{kokoro,workdir,logs,tts_chunks,voices} "$BIN_DIR"
+mkdir -p "$STATE_DIR"/{kokoro,workdir,logs,tts_chunks,voices,sounds} "$BIN_DIR"
 
 say "Copiando handler.sh, cancel.sh, overlay → $BIN_DIR/"
 install -m 755 "$REPO_DIR/bin/voice-claude-handler.sh" "$BIN_DIR/voice-claude-handler.sh"
@@ -51,6 +51,10 @@ say "Copiando scripts Kokoro → $STATE_DIR/kokoro/"
 install -m 755 "$REPO_DIR/kokoro/stream_tts.py" "$STATE_DIR/kokoro/stream_tts.py"
 install -m 755 "$REPO_DIR/kokoro/tts.py" "$STATE_DIR/kokoro/tts.py"
 install -m 755 "$REPO_DIR/kokoro/daemon.py" "$STATE_DIR/kokoro/daemon.py"
+
+say "Generando sonidos de estado → $STATE_DIR/sounds/"
+install -m 644 "$REPO_DIR/sounds/generate.py" "$STATE_DIR/sounds/generate.py"
+"$STATE_DIR/venv/bin/python" "$STATE_DIR/sounds/generate.py"
 
 if [[ ! -f "$STATE_DIR/workdir/CLAUDE.md" ]]; then
   say "Copiando CLAUDE.md de ejemplo → $STATE_DIR/workdir/CLAUDE.md (edítalo a tu gusto)"
@@ -124,6 +128,13 @@ Próximos pasos:
      error (rojo). Se arranca solo si pones \`exec-once = $BIN_DIR/voice-claude-overlay\`
      en tu config de Hyprland (ya incluido en los ejemplos del paso 2).
      Test manual: \`$BIN_DIR/voice-claude-overlay &\` y \`echo speaking > $STATE_DIR/state\`.
+
+  8. Sonidos de estado (generados en $STATE_DIR/sounds/ durante install):
+       - listening_start.wav  al presionar Alt+Z/Super+Z (chirp ascendente)
+       - listening_stop.wav   al terminar de grabar / empezar a procesar
+       - thinking.wav         loop suave mientras Claude genera la respuesta
+     Funcionan incluso con fullscreen exclusivo (audio no pasa por compositor).
+     Para regenerar: \`python3 $STATE_DIR/sounds/generate.py\`
 
 ⚠️  El modo Super+Z corre Claude con una whitelist explícita de comandos
    (hyprctl, pactl, omarchy*, steam, etc.) y tools no destructivas

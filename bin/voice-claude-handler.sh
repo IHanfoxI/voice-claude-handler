@@ -32,12 +32,46 @@ KOKORO_SPEED="${VOICE_CLAUDE_SPEED:-1.3}"
 TTS_SINK="${VOICE_CLAUDE_SINK:-}"
 TTS_CHUNK_DIR="$STATE_DIR/tts_chunks"
 STATE_INDICATOR="$STATE_DIR/state"
+SOUNDS_DIR="$STATE_DIR/sounds"
+THINKING_LOOP_PID_FILE="$STATE_DIR/thinking_loop.pid"
 
 mkdir -p "$WORKDIR" "$LOG_DIR"
 exec >>"$LOG_FILE" 2>&1
 
 log() { printf '%s %s\n' "$(date +'%H:%M:%S')" "$*"; }
-set_state() { printf '%s' "$1" > "$STATE_INDICATOR" 2>/dev/null || true; }
+
+THINKING_LOOP_PID=""
+
+_stop_thinking_loop() {
+  if [[ -n "$THINKING_LOOP_PID" ]]; then
+    pkill -P "$THINKING_LOOP_PID" 2>/dev/null || true
+    kill "$THINKING_LOOP_PID" 2>/dev/null || true
+    THINKING_LOOP_PID=""
+  fi
+  rm -f "$THINKING_LOOP_PID_FILE"
+}
+
+_play_sound() {
+  local f="$SOUNDS_DIR/$1"
+  [[ -f "$f" ]] || return 0
+  paplay "$f" >/dev/null 2>&1 &
+  disown 2>/dev/null || true
+}
+
+set_state() {
+  printf '%s' "$1" > "$STATE_INDICATOR" 2>/dev/null || true
+  _stop_thinking_loop
+  if [[ "$1" == "thinking" ]]; then
+    _play_sound "listening_stop.wav"
+    ( while true; do
+        paplay "$SOUNDS_DIR/thinking.wav" >/dev/null 2>&1
+        sleep 1.5
+      done ) &
+    THINKING_LOOP_PID=$!
+    printf '%d' "$THINKING_LOOP_PID" > "$THINKING_LOOP_PID_FILE" 2>/dev/null || true
+    disown "$THINKING_LOOP_PID" 2>/dev/null || true
+  fi
+}
 
 # Si la corrida termina abruptamente, el overlay quedaría stuck en
 # "thinking"/"speaking". Trampa cleanup. Cambiar EXIT_STATE=error antes de

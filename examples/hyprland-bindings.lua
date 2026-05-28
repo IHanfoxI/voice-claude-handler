@@ -9,7 +9,7 @@ hl.exec_once("$HOME/.local/bin/voice-claude-overlay")
 -- Antes de invocar Handy escribimos "listening" para que el overlay marque verde.
 hl.bind(
   "ALT + Z",
-  hl.dsp.exec_cmd("sh -c 'echo listening > $HOME/.local/share/voice-claude/state; echo quick > $HOME/.local/share/voice-claude/mode; handy --toggle-transcription'"),
+  hl.dsp.exec_cmd("sh -c 'paplay $HOME/.local/share/voice-claude/sounds/listening_start.wav >/dev/null 2>&1 & echo listening > $HOME/.local/share/voice-claude/state; echo quick > $HOME/.local/share/voice-claude/mode; handy --toggle-transcription'"),
   { description = "Voice → Claude (quick: haiku, Read only)" }
 )
 
@@ -18,7 +18,7 @@ hl.bind(
 -- uwsm-app, etc.) y editar archivos, pero NO ejecuta rm, sudo, chmod ni dd.
 hl.bind(
   "SUPER + Z",
-  hl.dsp.exec_cmd("sh -c 'echo listening > $HOME/.local/share/voice-claude/state; echo full > $HOME/.local/share/voice-claude/mode; handy --toggle-transcription'"),
+  hl.dsp.exec_cmd("sh -c 'paplay $HOME/.local/share/voice-claude/sounds/listening_start.wav >/dev/null 2>&1 & echo listening > $HOME/.local/share/voice-claude/state; echo full > $HOME/.local/share/voice-claude/mode; handy --toggle-transcription'"),
   { description = "Voice → Claude (full: opus, whitelist de comandos)" }
 )
 
