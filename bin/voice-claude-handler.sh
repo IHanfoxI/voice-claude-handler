@@ -112,6 +112,39 @@ if [[ -x "$KOKORO_PY" && -f "$KOKORO_DAEMON_SCRIPT" ]]; then
   fi
 fi
 
+# ---- Comando de reset de sesión por voz ----
+# Frases como "limpia la conversación", "nueva conversación", "borra el historial"
+# resetean la sesión activa sin llamar a Claude.
+_is_reset_cmd() {
+  local norm
+  norm=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' \
+    | iconv -f utf-8 -t ascii//TRANSLIT 2>/dev/null \
+    || printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  echo "$norm" | grep -Eiq \
+    '(limpia|borra|reinicia|nueva|empieza).*(conversacion|historial|sesion|cero)'
+}
+
+if _is_reset_cmd "$TEXT"; then
+  log "reset command detected (mode=$MODE)"
+  if [[ "$MODE" == "full" ]]; then
+    uuidgen > "$STATE_DIR/session-full.id"
+    rm -f "$STATE_DIR/.session-full_initialized"
+    RESET_MSG="Listo, conversación completa limpiada. La próxima pregunta empieza desde cero."
+  else
+    uuidgen > "$STATE_DIR/session.id"
+    rm -f "$STATE_DIR/.session_initialized"
+    RESET_MSG="Listo, conversación limpiada. La próxima pregunta empieza desde cero."
+  fi
+  log "reset done: new session id written"
+  mkdir -p "$TTS_CHUNK_DIR"
+  {
+    printf '{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}\n'
+    printf '{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"%s"}}}\n' "$RESET_MSG"
+    printf '{"type":"result","result":"%s"}\n' "$RESET_MSG"
+  } | "$KOKORO_PY" "$KOKORO_STREAM_SCRIPT" "$TTS_CHUNK_DIR" "$KOKORO_VOICE" "$KOKORO_SPEED" es "$TTS_SINK"
+  exit 0
+fi
+
 # ---- Decision: ¿necesitamos captura? ----
 # Heuristica por keywords en la transcripcion. Si la pregunta no aparenta ser
 # visual, omitimos `grim` + upload de imagen (ahorra ~500ms y ~3k tokens).
