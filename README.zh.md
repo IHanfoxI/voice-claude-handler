@@ -16,10 +16,12 @@
 
 - **Alt+Z（快速模式）：** Claude Haiku 4.5，使用 `--allowedTools Read`。适合快速、低成本的查询。
 - **Super+Z（完整模式）：** Claude Opus 4.7，使用显式命令白名单（`hyprctl`、`pactl`、`playerctl`、`omarchy*`、`steam`、`uwsm-app`、`setsid`、`notify-send`、`ls/cat/grep/find/jq/du/df` 等）以及非破坏性工具（`Read`、`Write`、`Edit`、`WebFetch`、`WebSearch`）。用于执行操作："打开 Spotify"、"下载文件夹有多大"、"暂停视频"。
-- **Alt+Shift+Z（取消）：** 如果当前响应（TTS + Claude + 合成）已开始但你不想等待，立即终止。
+- **Alt+Shift+Z（取消）：** 以协作信号取消当前响应——`stream_tts.py` 在句子间停止并终止当前 `paplay` 进程。
 - **懒加载截图：** 如果你的问题包含视觉关键词（"那个窗口显示什么"、"读一下这个错误"、"那个按钮"），则使用 `grim` 截图并随问题一起发送；否则跳过——每次调用节省约 500ms 和 3k tokens。
-- **流式 TTS：** Claude 的响应通过 [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) 逐句合成，边生成边播放。首字节时间约 0.3s。
+- **流式 TTS，三线程管道：** 合成与播放并行运行（stdin 线程、synth 线程、player 线程）。持久 Kokoro 守护进程消除约 1-2s 的模型加载延迟。首字节时间约 0.3s。
+- **状态音效：** 录音时播放上升音，处理时播放下降音，Claude 思考时循环播放柔和铃声。兼容独占全屏（音频，非 overlay）。
 - **持久会话：** 每种模式维护独立的 Claude Code 会话（固定 UUID），Claude 在多次提问间保持上下文记忆。
+- **语音重置：** 说"清除对话"（或"新对话"、"清空历史"）即可重新开始——即时 TTS 响应，不调用 Claude。
 
 ## 依赖项
 
@@ -43,13 +45,15 @@ cd voice-claude-handler
 ./install.sh
 ```
 
-安装脚本将：
-- 将 `bin/voice-claude-handler.sh` 复制到 `~/.local/bin/`。
-- 将 Python 脚本复制到 `~/.local/share/voice-claude/kokoro/`。
+安装脚本会询问你需要哪些状态指示器（视觉 overlay、声音、两者或均不需要）。然后：
+- 将 `bin/voice-claude-handler.sh` 及 Python 脚本复制到各自目标位置。
 - 下载 Kokoro 模型（约 325 MB）和语音文件（约 28 MB）。
-- 在 `~/.local/share/voice-claude/venv` 中创建含 `kokoro-onnx`、`soundfile`、`numpy` 的虚拟环境。
+- 在虚拟环境中安装 `kokoro-onnx`、`soundfile`、`numpy`、`pyyaml`。
 - 生成 Claude 会话的 UUID。
-- 输出后续配置步骤（配置 Handy + Hyprland）。
+- 将示例 `config.yaml` 复制到 `~/.local/share/voice-claude/config.yaml`。
+- 输出后续配置步骤。
+
+非交互式安装标志：`--no-overlay`、`--no-sound`、`--no-extras`。
 
 ## 配置
 
@@ -72,19 +76,21 @@ cd voice-claude-handler
 
 重新加载：`hyprctl reload`。
 
-### 3.（可选）固定音频输出设备
+### 3.（可选）config.yaml
 
-默认情况下 TTS 输出到系统默认音频设备。若要强制指定（例如通过 HDMI 输出到显示器音箱），请导出：
+安装脚本会将带注释的模板复制到 `~/.local/share/voice-claude/config.yaml`。你可以在此修改语音、速度、音频输出设备及触发截图的关键词：
 
-```bash
-# 列出可用的音频输出设备
-pactl list short sinks
-
-# 选择一个并在 shell 或快捷键中导出
-export VOICE_CLAUDE_SINK="alsa_output.pci-0000_XX_00.X.hdmi-stereo"
+```yaml
+tts:
+  voice: "ef_dora+af_bella"
+  speed: 1.3
+  sink: ""           # 空 = 默认输出设备。例如："alsa_output.pci-0000_XX_00.X.hdmi-stereo"
+screen_keywords:
+  words: [屏幕, 窗口, ...]   # 添加你自己的关键词
+  phrases: ["显示什么", ...]
 ```
 
-其他变量：`VOICE_CLAUDE_VOICE`（默认 `ef_dora+af_bella`）、`VOICE_CLAUDE_SPEED`（默认 `1.3`）。
+环境变量（`VOICE_CLAUDE_VOICE`、`VOICE_CLAUDE_SPEED`、`VOICE_CLAUDE_SINK`）仍然有效，且优先级高于 YAML 配置。
 
 ### 4. 工作目录中的 CLAUDE.md
 
@@ -154,8 +160,8 @@ Handy 进程可能未加载你的 shell rc。解决方案：(a) 全局安装 Cla
 **第一段音频被截断 / 语音"吞掉"了第一个音节**
 HDMI 设备处于挂起状态。handler 会预热，但有时不够。将 `kokoro/stream_tts.py` 中的 `FIRST_CHUNK_LEAD_SILENCE_S` 从 0.2s 增加到 0.4s，或用 `pactl unload-module module-suspend-on-idle` 阻止设备挂起。
 
-**Kokoro 第一次运行很慢**
-模型加载需要约 1-2s（CPU）。这是每次调用的一次性成本。要消除它需要将 Kokoro 作为持久守护进程运行——已列入路线图但实现并不简单。
+**Kokoro 延迟高 / 响应慢**
+持久守护进程应消除约 1-2s 的模型加载延迟。验证守护进程是否运行：`python3 ~/.local/share/voice-claude/kokoro/daemon.py --ping`。若无响应，handler 将在下次调用时自动重启。守护进程日志：`~/.local/share/voice-claude/logs/daemon.log`。
 
 **技术词汇（命令名、应用名）转录不准确**
 Handy 在配置中支持"自定义词汇"。添加 `hyprctl`、`pactl`、你最常用的应用名称等。也可以从 Handy 界面尝试其他 Whisper/Parakeet 模型。
@@ -168,11 +174,11 @@ Handy 在配置中支持"自定义词汇"。添加 `hyprctl`、`pactl`、你最�
 
 ## 自定义
 
-- **语音：** `VOICE_CLAUDE_VOICE` 接受名称（`ef_dora`、`em_alex`、`if_sara` 等）或混合（`ef_dora+af_bella`）。完整列表见 [kokoro-onnx README](https://github.com/thewh1teagle/kokoro-onnx)。
+- **语音 / 速度 / 输出设备：** 编辑 `~/.local/share/voice-claude/config.yaml`（`tts` 部分），或导出 `VOICE_CLAUDE_VOICE`、`VOICE_CLAUDE_SPEED`、`VOICE_CLAUDE_SINK`。可用语音列表见 [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx)；支持混合如 `ef_dora+af_bella`。
 - **速度：** `VOICE_CLAUDE_SPEED`（默认 `1.3`）。`0.8` 到 `1.5` 之间的值通常效果较好。
-- **模型 / 推理强度：** 编辑 `voice-claude-handler.sh` 中模式的 `if/else` 块。
+- **模型 / 推理强度：** `config.yaml` 中的 `models.quick` / `models.full` 部分，或直接编辑 `voice-claude-handler.sh`。
 - **完整模式白名单：** handler 中 `if [[ "$MODE" == "full" ]]` 块开头的 `CLAUDE_FULL_BASH_ALLOW` 和 `CLAUDE_FULL_TOOLS_ALLOW`。根据你的工作流添加或删除命令。
-- **截图关键词：** 调整 handler 中的 `SCREEN_KW_RE` 和 `SCREEN_PHRASE_RE`。当前列表为西班牙语；添加你自己的关键词。
+- **截图关键词：** 在 `config.yaml` 的 `screen_keywords.words` 和 `screen_keywords.phrases` 中配置。添加你自己的关键词，删除导致误触发的条目。
 
 ## 致谢 / 灵感来源
 

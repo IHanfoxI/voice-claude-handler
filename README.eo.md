@@ -16,10 +16,12 @@ Kreita por homoj kiuj volas demandi Claudon dum ili ludas, redaktas videojn aŭ 
 
 - **Alt+Z (rapida):** Claude Haiku 4.5 kun `--allowedTools Read`. Por rapidaj, malmultekostaj demandoj.
 - **Super+Z (plena):** Claude Opus 4.7 kun eksplicita permeslisto de komandoj (`hyprctl`, `pactl`, `playerctl`, `omarchy*`, `steam`, `uwsm-app`, `setsid`, `notify-send`, `ls/cat/grep/find/jq/du/df`, ktp.) kaj nedetrua iloj (`Read`, `Write`, `Edit`, `WebFetch`, `WebSearch`). Por peti agojn: "malfermu Spotify", "kiom pezas la elŝuta dosierujo", "paŭzigu la filmeton".
-- **Alt+Shift+Z (nuligi):** ĉesigas la kuriantan respondon (TTS + Claude + sinteza) se ĝi komencis respondi ion kiun vi ne volas atendi.
+- **Alt+Shift+Z (nuligi):** ĉesigas la kuriantan respondon per kooperativa signalo — `stream_tts.py` haltas inter frazoj kaj finas la aktualan `paplay`.
 - **Maldiligentan ekrankopio:** se via demando havas vidajn ŝlosilvortojn ("kion diras tiu fenestro", "legu ĉi tiun eraron", "tiu butono"), ĝi faras ekrankopiojn per `grim` kaj sendas ĝin kun la demando. Alie ĝi preterlasas tion — ŝparas ~500ms kaj ~3k ĵetonojn por alvoko.
-- **Fluema TTS:** La respondo de Claude estas sintezita per [Kokoro](https://github.com/thewh1teagle/kokoro-onnx) frazo post frazo dum ĝi estas generata. Unua aŭdia eliĝo ~0.3s.
+- **Fluema TTS kun 3-fadena dukto:** sintezado kaj reproduktado kuras paralele (fadeno stdin, fadeno synth, fadeno player). Daŭra Kokoro-demono forigas ~1-2s da modelŝargado. TTFA ~0.3s.
+- **Stataj sonoj:** supreniranta ĉirpo dum registrado, malsupreniranta dum pretigo, mola sonorilo en buklo dum Claude pensas. Funkcias kun ekskluziva tutekrana reĝimo (aŭdio, ne surtavolo).
 - **Daŭraj sesioj:** ĉiu reĝimo konservas sian propran Claude Code-sesion (fiksa UUID), do Claude memoras la kuntekston inter demandoj.
+- **Voĉa nuligo:** diru "viŝu la konversacion" (aŭ "nova konversacio", "forviŝu la historion") por rekomenci — tuja TTS-respondo, sen voki Claudon.
 
 ## Postuloj
 
@@ -43,13 +45,15 @@ cd voice-claude-handler
 ./install.sh
 ```
 
-La instalilo:
-- Kopias `bin/voice-claude-handler.sh` al `~/.local/bin/`.
-- Kopias Python-skriptojn al `~/.local/share/voice-claude/kokoro/`.
-- Elŝutas la Kokoro-modelon (~325 MB) kaj voĉojn (~28 MB) en la saman dosierujon.
-- Kreas venv en `~/.local/share/voice-claude/venv` kun `kokoro-onnx`, `soundfile`, `numpy`.
+La instalilo demandas pri statosurtavolo kaj sonoj. Poste:
+- Kopias `bin/voice-claude-handler.sh` kaj Python-skriptojn al siaj celoj.
+- Elŝutas la Kokoro-modelon (~325 MB) kaj voĉojn (~28 MB).
+- Kreas venv kun `kokoro-onnx`, `soundfile`, `numpy`, `pyyaml`.
 - Generas la UUID-ojn de la Claude-sesioj.
-- Presas la finajn paŝojn (agordi Handy + Hyprland).
+- Kopias la ekzemplon de `config.yaml` al `~/.local/share/voice-claude/config.yaml`.
+- Presas la finajn paŝojn.
+
+Flagoj por ne-interaga instalado: `--no-overlay`, `--no-sound`, `--no-extras`.
 
 ## Agordado
 
@@ -72,19 +76,21 @@ Aldonu la du ligilojn al via agordo:
 
 Reŝargu: `hyprctl reload`.
 
-### 3. (Laŭvola) Fiksa aŭdia eligujo
+### 3. (Laŭvola) config.yaml
 
-Defaŭlte TTS eliras al la sistema defaŭlta eligujo. Se vi volas devigi specifan (ekz. monitoraj laŭtparoliloj per HDMI), eksportu:
+La instalilo kopias dokumentitan ŝablonon al `~/.local/share/voice-claude/config.yaml`. Tie vi povas ŝanĝi voĉon, rapidecon, aŭdian eliujon, kaj la ŝlosilvortojn kiuj ekigas ekrankopion:
 
-```bash
-# Listigu disponeblajn eligujaĵojn
-pactl list short sinks
-
-# Elektu unu kaj eksportu en via ŝelo aŭ en la klavkombino
-export VOICE_CLAUDE_SINK="alsa_output.pci-0000_XX_00.X.hdmi-stereo"
+```yaml
+tts:
+  voice: "ef_dora+af_bella"
+  speed: 1.3
+  sink: ""           # malplena = sistema defaŭlto. Ekz: "alsa_output.pci-0000_XX_00.X.hdmi-stereo"
+screen_keywords:
+  words: [ekrano, fenestro, ...]   # aldonu viajn
+  phrases: ["kion diras", ...]
 ```
 
-Aliaj variabloj: `VOICE_CLAUDE_VOICE` (defaŭlte `ef_dora+af_bella`), `VOICE_CLAUDE_SPEED` (defaŭlte `1.3`).
+La env-variabloj (`VOICE_CLAUDE_VOICE`, `VOICE_CLAUDE_SPEED`, `VOICE_CLAUDE_SINK`) ankoraŭ funkcias kaj havas prioritaton super la YAML.
 
 ### 4. CLAUDE.md de la laboradresaro
 
@@ -154,8 +160,8 @@ La Handy-procezo eble ne ŝargis vian ŝelan rc. Solvoj: (a) instalu Claude Code
 **La unua aŭdioparto estas tranĉita / la voĉo "glutas" la unuan silabon**
 La HDMI-eligujo estis en suspendo. La handler faras antaŭvarmon sed foje ĝi ne sufiĉas. Plialigu `FIRST_CHUNK_LEAD_SILENCE_S` en `kokoro/stream_tts.py` (de 0.2s al 0.4s, ekzemple) aŭ malhelpas la eliujon suspendi per `pactl unload-module module-suspend-on-idle`.
 
-**Kokoro estas malrapida la unuan fojon**
-La ŝargado de la modelo daŭras ~1-2s sur CPU. Ĝi estas unuafoja kosto por alvoko. Por forigi ĝin oni devus ruli Kokoro kiel daŭran demon — ĝi estas en la vojomapo sed ne estas simpla.
+**Kokoro estas malrapida / la respondo havas altan latentemon**
+La daŭra demono devus forigi ~1-2s da modelŝargado. Kontrolu ke ĝi funkcias: `python3 ~/.local/share/voice-claude/kokoro/daemon.py --ping`. Se ĝi ne respondas, ĉe la sekva alvoko la handler aŭtomate restartas ĝin. Protokoloj de la demono: `~/.local/share/voice-claude/logs/daemon.log`.
 
 **Malĝusta transskribo de teknikaj vortoj (komandnomoj, aplikaĵoj)**
 Handy subtenas "kutimajn vortojn" en ĝia agordo. Aldonu `hyprctl`, `pactl`, la nomojn de la aplikaĵoj kiujn vi plej uzas, ktp. Vi ankaŭ povas provi alian Whisper/Parakeet-modelon el la interfaco de Handy.
@@ -168,11 +174,10 @@ La permeslisto ne inkluzivas la komandon kiun vi bezonas. Aldonu ĝin al `CLAUDE
 
 ## Personigado
 
-- **Voĉo:** `VOICE_CLAUDE_VOICE` akceptas nomojn (`ef_dora`, `em_alex`, `if_sara`, ktp.) aŭ miksaĵojn (`ef_dora+af_bella`). Kompleta listo en [la kokoro-onnx README](https://github.com/thewh1teagle/kokoro-onnx).
-- **Rapideco:** `VOICE_CLAUDE_SPEED` (defaŭlte `1.3`). Valoroj inter `0.8` kaj `1.5` kutime sonas bone.
-- **Modelo / penado:** redaktu la reĝiman `if/else`-blokon en `voice-claude-handler.sh`.
-- **Permeslisto de plena reĝimo:** `CLAUDE_FULL_BASH_ALLOW` kaj `CLAUDE_FULL_TOOLS_ALLOW` je la komenco de la `if [[ "$MODE" == "full" ]]`-bloko en la handler. Aldonu aŭ forigu komandojn laŭ via laborfluo.
-- **Ŝlosilvortoj por ekrankopiaĵoj:** agordu `SCREEN_KW_RE` kaj `SCREEN_PHRASE_RE` en la handler. La aktuala listo estas en la hispana; aldonu la viajn.
+- **Voĉo / rapideco / eligujo:** redaktu `~/.local/share/voice-claude/config.yaml` (sekcio `tts`) aŭ eksportu `VOICE_CLAUDE_VOICE`, `VOICE_CLAUDE_SPEED`, `VOICE_CLAUDE_SINK`. Disponeblaj voĉoj en [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx); akceptas miksaĵojn kiel `ef_dora+af_bella`.
+- **Ŝlosilvortoj por ekrankopiaĵoj:** en `config.yaml`, sekcio `screen_keywords.words` kaj `screen_keywords.phrases`. Aldonu viajn; forigu tiujn kiuj donas falsajn pozitivojn.
+- **Modelo / penado:** sekcio `models.quick` / `models.full` en `config.yaml`, aŭ rekte en `voice-claude-handler.sh`.
+- **Permeslisto de plena reĝimo:** `CLAUDE_FULL_BASH_ALLOW` kaj `CLAUDE_FULL_TOOLS_ALLOW` en la handler. Aldonu aŭ forigu laŭ via laborfluo. **Neniam uzu `Bash(*:*)`** — ĝi ekvivalas al `--dangerously-skip-permissions`.
 
 ## Kreditoj / inspiro
 
