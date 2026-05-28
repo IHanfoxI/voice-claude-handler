@@ -38,6 +38,9 @@ THINKING_LOOP_PID_FILE="$STATE_DIR/thinking_loop.pid"
 mkdir -p "$WORKDIR" "$LOG_DIR"
 exec >>"$LOG_FILE" 2>&1
 
+# Limpiar flag de cancel de la invocación anterior.
+rm -f "$STATE_DIR/cancel"
+
 log() { printf '%s %s\n' "$(date +'%H:%M:%S')" "$*"; }
 
 THINKING_LOOP_PID=""

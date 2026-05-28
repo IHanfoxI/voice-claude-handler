@@ -8,7 +8,13 @@
 
 set -u
 
-STATE_INDICATOR="$HOME/.local/share/voice-claude/state"
+STATE_DIR="$HOME/.local/share/voice-claude"
+STATE_INDICATOR="$STATE_DIR/state"
+
+# Señal cooperativa: stream_tts.py y handler.sh chequean este archivo entre
+# oraciones/pasos y se detienen limpiamente al detectarlo.
+touch "$STATE_DIR/cancel" 2>/dev/null || true
+
 # Resetea overlay inmediatamente (sin esperar a que mueran los procesos).
 printf 'idle' > "$STATE_INDICATOR" 2>/dev/null || true
 
