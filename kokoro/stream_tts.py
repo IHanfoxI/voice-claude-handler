@@ -30,6 +30,10 @@ SPEED = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
 LANG = sys.argv[4] if len(sys.argv) > 4 else "es"
 SINK = sys.argv[5] if len(sys.argv) > 5 else ""
 
+PIPER_BIN = os.environ.get("VOICE_CLAUDE_PIPER_BIN", "piper-tts")
+USE_PIPER = VOICE_SPEC.startswith("piper:")
+PIPER_MODEL = VOICE_SPEC[len("piper:"):] if USE_PIPER else None
+
 DAEMON_SOCK = Path(os.environ.get(
     "VOICE_CLAUDE_DAEMON_SOCK",
     Path.home() / ".local/share/voice-claude/kokoro.sock",
@@ -113,25 +117,29 @@ def _ping_daemon() -> bool:
         return False
 
 
-USE_DAEMON = _ping_daemon()
+USE_DAEMON = False
 kokoro = None
 voice_local = None
 
-if USE_DAEMON:
-    log(f"using kokoro daemon at {DAEMON_SOCK}")
+if USE_PIPER:
+    log(f"using piper backend: {PIPER_MODEL}")
 else:
-    log("daemon unavailable, loading kokoro in-process")
-    from kokoro_onnx import Kokoro
-    base = Path(__file__).resolve().parent
-    t0 = time.monotonic()
-    kokoro = Kokoro(str(base / "kokoro-v1.0.onnx"), str(base / "voices-v1.0.bin"))
-    log(f"kokoro ready in {time.monotonic()-t0:.2f}s")
-    if "+" in VOICE_SPEC:
-        parts = VOICE_SPEC.split("+")
-        styles = [kokoro.get_voice_style(p) for p in parts]
-        voice_local = sum(styles) / len(styles)
+    USE_DAEMON = _ping_daemon()
+    if USE_DAEMON:
+        log(f"using kokoro daemon at {DAEMON_SOCK}")
     else:
-        voice_local = VOICE_SPEC
+        log("daemon unavailable, loading kokoro in-process")
+        from kokoro_onnx import Kokoro
+        base = Path(__file__).resolve().parent
+        t0 = time.monotonic()
+        kokoro = Kokoro(str(base / "kokoro-v1.0.onnx"), str(base / "voices-v1.0.bin"))
+        log(f"kokoro ready in {time.monotonic()-t0:.2f}s")
+        if "+" in VOICE_SPEC:
+            parts = VOICE_SPEC.split("+")
+            styles = [kokoro.get_voice_style(p) for p in parts]
+            voice_local = sum(styles) / len(styles)
+        else:
+            voice_local = VOICE_SPEC
 
 
 def daemon_synth(text: str, out_path: Path, lead_silence: float) -> None:
@@ -166,6 +174,20 @@ def local_synth(text: str, out_path: Path, lead_silence: float) -> None:
         lead = np.zeros(int(sr * lead_silence), dtype=samples.dtype)
         samples = np.concatenate([lead, samples])
     sf.write(out_path, samples, sr)
+
+
+def piper_synth(text: str, out_path: Path, lead_silence: float) -> None:
+    proc = subprocess.run(
+        [PIPER_BIN, "--model", PIPER_MODEL, "--output_file", str(out_path)],
+        input=text.encode(),
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"piper-tts: {proc.stderr.decode()[:300]}")
+    if lead_silence > 0:
+        data, sr = sf.read(out_path)
+        lead = np.zeros(int(sr * lead_silence), dtype=data.dtype)
+        sf.write(out_path, np.concatenate([lead, data]), sr)
 
 
 SENTENCE_BOUNDARY = re.compile(r"[.!?…\n](\s+)")
@@ -205,7 +227,9 @@ def synth_worker() -> None:
         wav_path = OUT_DIR / f"chunk_{idx:03d}.wav"
         lead = FIRST_CHUNK_LEAD_SILENCE_S if idx == 0 else 0.0
         try:
-            if USE_DAEMON:
+            if USE_PIPER:
+                piper_synth(sentence, wav_path, lead)
+            elif USE_DAEMON:
                 daemon_synth(sentence, wav_path, lead)
             else:
                 local_synth(sentence, wav_path, lead)
