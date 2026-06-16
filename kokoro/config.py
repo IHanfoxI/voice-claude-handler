@@ -33,6 +33,9 @@ _DEFAULTS: dict = {
         "lang": "es",
         "sink": "",
         "daemon_timeout": 30,
+        "piper_noise_scale": 1.0,
+        "piper_noise_w": 1.1,
+        "piper_length_scale": 0.85,
     },
     "models": {
         "quick": {"model": "haiku", "effort": "low"},
@@ -116,6 +119,9 @@ if __name__ == "__main__":
         print(f"VOICE_CLAUDE_SPEED={shlex.quote(str(tts['speed']))}")
         print(f"VOICE_CLAUDE_SINK={shlex.quote(str(tts['sink']))}")
         print(f"VOICE_CLAUDE_LANG={shlex.quote(str(tts['lang']))}")
+        print(f"VOICE_CLAUDE_PIPER_NOISE_SCALE={shlex.quote(str(tts['piper_noise_scale']))}")
+        print(f"VOICE_CLAUDE_PIPER_NOISE_W={shlex.quote(str(tts['piper_noise_w']))}")
+        print(f"VOICE_CLAUDE_PIPER_LENGTH_SCALE={shlex.quote(str(tts['piper_length_scale']))}")
         kw = cfg["screen_keywords"]
         print(f"VOICE_CLAUDE_SCREEN_KW_RE={shlex.quote(_build_screen_kw_re(kw['words']))}")
         print(f"VOICE_CLAUDE_SCREEN_PHRASE_RE={shlex.quote(_build_screen_phrase_re(kw['phrases']))}")

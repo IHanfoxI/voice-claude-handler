@@ -33,6 +33,9 @@ SINK = sys.argv[5] if len(sys.argv) > 5 else ""
 PIPER_BIN = os.environ.get("VOICE_CLAUDE_PIPER_BIN", "piper-tts")
 USE_PIPER = VOICE_SPEC.startswith("piper:")
 PIPER_MODEL = VOICE_SPEC[len("piper:"):] if USE_PIPER else None
+PIPER_NOISE_SCALE = os.environ.get("VOICE_CLAUDE_PIPER_NOISE_SCALE", "0.9")
+PIPER_NOISE_W = os.environ.get("VOICE_CLAUDE_PIPER_NOISE_W", "1.0")
+PIPER_LENGTH_SCALE = os.environ.get("VOICE_CLAUDE_PIPER_LENGTH_SCALE", "0.9")
 
 DAEMON_SOCK = Path(os.environ.get(
     "VOICE_CLAUDE_DAEMON_SOCK",
@@ -178,7 +181,13 @@ def local_synth(text: str, out_path: Path, lead_silence: float) -> None:
 
 def piper_synth(text: str, out_path: Path, lead_silence: float) -> None:
     proc = subprocess.run(
-        [PIPER_BIN, "--model", PIPER_MODEL, "--output_file", str(out_path)],
+        [
+            PIPER_BIN, "--model", PIPER_MODEL,
+            "--noise_scale", PIPER_NOISE_SCALE,
+            "--noise_w", PIPER_NOISE_W,
+            "--length_scale", PIPER_LENGTH_SCALE,
+            "--output_file", str(out_path),
+        ],
         input=text.encode(),
         capture_output=True,
     )
