@@ -35,7 +35,7 @@ _DEFAULTS: dict = {
         "daemon_timeout": 30,
         "piper_noise_scale": 1.0,
         "piper_noise_w": 1.1,
-        "piper_length_scale": 0.85,
+        "piper_length_scale": 0.95,
     },
     "models": {
         "quick": {"model": "haiku", "effort": "low"},
